@@ -1,0 +1,12 @@
+node_modules/
+build/
+dist/
+dist-cg/
+media-output/
+*.zip
+.playwright-cli/
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example

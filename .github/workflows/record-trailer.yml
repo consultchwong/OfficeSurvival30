@@ -1,0 +1,147 @@
+name: Generate Platform Media Pack (Y8 & CrazyGames)
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: 'Target platform media pack to generate'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - y8
+          - crazygames
+          - social
+
+jobs:
+  generate-media:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+
+      - name: Install project dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: Build generic & CrazyGames game ZIPs
+        run: |
+          npm run build
+          (cd dist && zip -r ../game-portal-release.zip .)
+          VITE_PORTAL=crazygames npx vite build --outDir dist-cg
+          (cd dist-cg && zip -r ../crazygames-release.zip .)
+
+      - name: Install Playwright & Chromium (isolated temp dir)
+        run: |
+          mkdir -p /tmp/pw-runner
+          cd /tmp/pw-runner
+          npm init -y
+          npm install playwright
+          npx playwright install chromium --with-deps
+
+      - name: Ensure ffmpeg is installed
+        run: |
+          if ! command -v ffmpeg >/dev/null 2>&1; then
+            sudo apt-get update && sudo apt-get install -y ffmpeg
+          fi
+
+      - name: Start preview server & record platform gameplay media
+        env:
+          PLAYWRIGHT_MODULE: /tmp/pw-runner/node_modules/playwright
+          MEDIA_PLATFORM: ${{ github.event.inputs.platform || 'all' }}
+          TRAILER_URL: 'http://127.0.0.1:4173/?trailer=1'
+        run: |
+          npx vite preview --port 4173 --host 127.0.0.1 &
+          SERVER_PID=$!
+          trap "kill $SERVER_PID 2>/dev/null || true" EXIT
+          for i in $(seq 1 30); do
+            if curl -s http://127.0.0.1:4173 >/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          node scripts/record-trailer.mjs
+
+      - name: Process Y8 Media Pack (1280x720, 760x570, >=15s MP4)
+        if: ${{ inputs.platform == 'all' || inputs.platform == 'y8' }}
+        run: |
+          mkdir -p media-output/y8
+          cp game-portal-release.zip media-output/y8/game-portal-release.zip
+
+          LANDSCAPE_SRC="media-output/raw/cover-landscape.png"
+          PORTRAIT_SRC="media-output/raw/cover-portrait.png"
+          [ -f "src/assets/images/cover_landscape_1794807572982.jpg" ] && LANDSCAPE_SRC="src/assets/images/cover_landscape_1794807572982.jpg"
+          [ -f "src/assets/images/cover_portrait_1794807573222.jpg" ] && PORTRAIT_SRC="src/assets/images/cover_portrait_1794807573222.jpg"
+
+          ffmpeg -y -i "$LANDSCAPE_SRC" -vf "scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080" -q:v 2 media-output/y8/y8-promo-landscape-1920x1080.jpg
+          ffmpeg -y -i "$PORTRAIT_SRC" -vf "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920" -q:v 2 media-output/y8/y8-promo-portrait-1080x1920.jpg
+          ffmpeg -y -i "$LANDSCAPE_SRC" -vf "scale=760:570:force_original_aspect_ratio=increase,crop=760:570" -q:v 2 media-output/y8/y8-promo-card-760x570.jpg
+
+          # Y8 Gameplay Videos (>= 15s, starts straight in gameplay)
+          ffmpeg -y -i media-output/raw/y8-video-16x9-1280x720.webm -t 18 -vf "fps=30,scale=1280:720,setsar=1,format=yuv420p" -c:v libx264 -preset fast -crf 20 -an -movflags +faststart media-output/y8/y8-video-16x9-1280x720.mp4
+          ffmpeg -y -i media-output/raw/y8-video-4x3-960x720.webm -t 18 -vf "fps=30,scale=960:720,setsar=1,format=yuv420p" -c:v libx264 -preset fast -crf 20 -an -movflags +faststart media-output/y8/y8-video-4x3-960x720.mp4
+          ls -lh media-output/y8/
+
+      - name: Process CrazyGames Media Pack (1920x1080, 800x1200, 800x800, 17s Muted MP4)
+        if: ${{ inputs.platform == 'all' || inputs.platform == 'crazygames' }}
+        run: |
+          mkdir -p media-output/crazygames
+          cp crazygames-release.zip media-output/crazygames/crazygames-release.zip
+
+          LANDSCAPE_SRC="media-output/raw/cover-landscape.png"
+          PORTRAIT_SRC="media-output/raw/cover-portrait.png"
+          SQUARE_SRC="media-output/raw/cover-square.png"
+          [ -f "src/assets/images/cover_landscape_1794807572982.jpg" ] && LANDSCAPE_SRC="src/assets/images/cover_landscape_1794807572982.jpg"
+          [ -f "src/assets/images/cover_portrait_1794807573222.jpg" ] && PORTRAIT_SRC="src/assets/images/cover_portrait_1794807573222.jpg"
+          [ -f "src/assets/images/game_icon_1794807574316.jpg" ] && SQUARE_SRC="src/assets/images/game_icon_1794807574316.jpg"
+
+          # 3 Mandatory Cover Image Sizes
+          ffmpeg -y -i "$LANDSCAPE_SRC" -vf "scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080" -q:v 2 media-output/crazygames/crazygames-cover-landscape-1920x1080.jpg
+          ffmpeg -y -i "$PORTRAIT_SRC" -vf "scale=800:1200:force_original_aspect_ratio=increase,crop=800:1200" -q:v 2 media-output/crazygames/crazygames-cover-portrait-800x1200.jpg
+          ffmpeg -y -i "$SQUARE_SRC" -vf "scale=800:800:force_original_aspect_ratio=increase,crop=800:800" -q:v 2 media-output/crazygames/crazygames-cover-square-800x800.jpg
+
+          # CrazyGames Preview Videos: 0.5s static cover opening frame + 16.5s gameplay = 17s muted MP4
+          ffmpeg -y -loop 1 -t 0.5 -i media-output/crazygames/crazygames-cover-landscape-1920x1080.jpg -i media-output/raw/crazygames-video-landscape-1920x1080-raw.webm \
+            -filter_complex "[0:v]fps=30,scale=1920:1080,setsar=1,format=yuv420p[v0];[1:v]fps=30,scale=1920:1080,setsar=1,format=yuv420p,trim=duration=16.5,setpts=PTS-STARTPTS[v1];[v0][v1]concat=n=2:v=1:a=0[v]" \
+            -map "[v]" -an -c:v libx264 -preset fast -crf 21 -movflags +faststart media-output/crazygames/crazygames-video-landscape-1920x1080.mp4
+
+          ffmpeg -y -loop 1 -t 0.5 -i media-output/crazygames/crazygames-cover-portrait-800x1200.jpg -i media-output/raw/crazygames-video-portrait-800x1200-raw.webm \
+            -filter_complex "[0:v]fps=30,scale=800:1200,setsar=1,format=yuv420p[v0];[1:v]fps=30,scale=800:1200,setsar=1,format=yuv420p,trim=duration=16.5,setpts=PTS-STARTPTS[v1];[v0][v1]concat=n=2:v=1:a=0[v]" \
+            -map "[v]" -an -c:v libx264 -preset fast -crf 21 -movflags +faststart media-output/crazygames/crazygames-video-portrait-800x1200.mp4
+          ls -lh media-output/crazygames/
+
+      - name: Process Social / Shorts Video (9:16 1080x1920)
+        if: ${{ inputs.platform == 'all' || inputs.platform == 'social' }}
+        run: |
+          mkdir -p media-output/social
+          ffmpeg -y -i media-output/raw/social-shorts-9x16-720x1280.webm -t 17 -vf "fps=30,scale=1080:1920,setsar=1,format=yuv420p" -c:v libx264 -preset fast -crf 20 -an -movflags +faststart media-output/social/social-shorts-9x16-1080x1920.mp4
+          ls -lh media-output/social/
+
+      - name: Upload Y8 Media Pack Artifact
+        if: ${{ inputs.platform == 'all' || inputs.platform == 'y8' }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: y8-media-pack
+          path: media-output/y8/
+          retention-days: 30
+
+      - name: Upload CrazyGames Media Pack Artifact
+        if: ${{ inputs.platform == 'all' || inputs.platform == 'crazygames' }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: crazygames-media-pack
+          path: media-output/crazygames/
+          retention-days: 30
+
+      - name: Upload Social Shorts Artifact
+        if: ${{ inputs.platform == 'all' || inputs.platform == 'social' }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: social-shorts-pack
+          path: media-output/social/
+          retention-days: 30

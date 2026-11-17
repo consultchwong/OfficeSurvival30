@@ -1,0 +1,6 @@
+{
+  "name": "社畜生存 30 天",
+  "description": "王權 Reigns 玩法的職場求生卡牌遊戲！滑動卡片在摸魚、主管好感、存款與健康四個天秤間抉擇，看你能否在荒謬職場中活過 30 天！",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

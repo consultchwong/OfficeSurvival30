@@ -1,0 +1,113 @@
+name: Build Game Release & Deploy
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    outputs:
+      pages_enabled: ${{ steps.check_pages.outputs.enabled }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: TypeScript type check
+        run: npx tsc --noEmit
+
+      - name: Run game logic & i18n unit tests
+        run: npx tsx --test src/game/reignsLogic.test.ts
+
+      - name: Build generic static bundle (Y8 / GamePix / itch.io / Pages)
+        run: npm run build
+
+      - name: Package game-portal-release.zip (Zero external SDK)
+        working-directory: dist
+        run: zip -r ../game-portal-release.zip .
+
+      - name: Build CrazyGames SDK v3 bundle & package crazygames-release.zip
+        env:
+          VITE_PORTAL: crazygames
+        run: |
+          rm -rf dist-cg
+          npx vite build --outDir dist-cg
+          (cd dist-cg && zip -r ../crazygames-release.zip .)
+
+      - name: Upload game-portal-release.zip Artifact (Y8 / GamePix / itch.io)
+        uses: actions/upload-artifact@v6
+        with:
+          name: game-portal-release
+          path: game-portal-release.zip
+          retention-days: 30
+
+      - name: Upload crazygames-release.zip Artifact (With CrazyGames SDK v3)
+        uses: actions/upload-artifact@v6
+        with:
+          name: crazygames-release
+          path: crazygames-release.zip
+          retention-days: 30
+
+      - name: Check if GitHub Pages (GitHub Actions source) is enabled
+        id: check_pages
+        run: |
+          RESPONSE=$(curl -s -w "\n%{http_code}" \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/pages")
+          STATUS=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+          BUILD_TYPE=$(echo "$BODY" | jq -r '.build_type // ""' 2>/dev/null || echo "")
+
+          if [ "$STATUS" = "200" ] && [ "$BUILD_TYPE" = "workflow" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "### GitHub Pages Skipped (Not Enabled Yet)" >> "$GITHUB_STEP_SUMMARY"
+            echo "To enable automatic GitHub Pages deployment, open **Settings -> Pages** in this repository and set **Build and deployment -> Source** to **GitHub Actions**." >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "Your portal ZIP artifacts (\`game-portal-release\` and \`crazygames-release\`) were built and uploaded normally." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload GitHub Pages Artifact
+        if: steps.check_pages.outputs.enabled == 'true'
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: dist
+
+      - name: Deploy to CrazyGames (if CRAZYGAMES_TOKEN is set)
+        env:
+          CRAZYGAMES_TOKEN: ${{ secrets.CRAZYGAMES_TOKEN }}
+        run: |
+          if [ -n "$CRAZYGAMES_TOKEN" ]; then
+            npx @crazygames/sdk-cli upload --token "$CRAZYGAMES_TOKEN" --file crazygames-release.zip
+          else
+            echo "CRAZYGAMES_TOKEN not set, skipping CrazyGames CLI upload."
+          fi
+
+  deploy-pages:
+    needs: build
+    if: needs.build.outputs.pages_enabled == 'true'
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

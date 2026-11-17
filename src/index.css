@@ -1,0 +1,88 @@
+@import "tailwindcss";
+
+@layer utilities {
+  .jp-text-outline {
+    text-shadow:
+      -2px -2px 0 #0f172a,
+       2px -2px 0 #0f172a,
+      -2px  2px 0 #0f172a,
+       2px  2px 0 #0f172a,
+       0px  3px 0 #0f172a;
+  }
+
+  .jp-text-outline-sm {
+    text-shadow:
+      -1.5px -1.5px 0 #0f172a,
+       1.5px -1.5px 0 #0f172a,
+      -1.5px  1.5px 0 #0f172a,
+       1.5px  1.5px 0 #0f172a;
+  }
+
+  .jp-text-outline-white {
+    text-shadow:
+      -2px -2px 0 #ffffff,
+       2px -2px 0 #ffffff,
+      -2px  2px 0 #ffffff,
+       2px  2px 0 #ffffff,
+       0px  3px 6px rgba(15, 23, 42, 0.35);
+  }
+
+  .jp-halftone {
+    background-image: radial-gradient(rgba(15, 23, 42, 0.08) 1.5px, transparent 1.5px);
+    background-size: 10px 10px;
+  }
+
+  .jp-halftone-light {
+    background-image: radial-gradient(rgba(255, 255, 255, 0.14) 1.5px, transparent 1.5px);
+    background-size: 10px 10px;
+  }
+
+  .jp-card-shadow {
+    box-shadow: 0 8px 0 #0f172a, 0 14px 24px rgba(15, 23, 42, 0.25);
+  }
+
+  .jp-btn-bevel {
+    box-shadow: 0 4px 0 #0f172a;
+  }
+
+  .jp-btn-bevel:active {
+    transform: translateY(3px);
+    box-shadow: 0 1px 0 #0f172a;
+  }
+}
+
+@keyframes floatPop {
+  0% {
+    opacity: 0;
+    transform: translateY(8px) scale(0.75);
+  }
+  25% {
+    opacity: 1;
+    transform: translateY(-4px) scale(1.15);
+  }
+  75% {
+    opacity: 1;
+    transform: translateY(-10px) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-18px) scale(0.95);
+  }
+}
+
+.animate-float-pop {
+  animation: floatPop 1.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes subtleFloat {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+.animate-subtle-float {
+  animation: subtleFloat 3.4s ease-in-out infinite;
+}
