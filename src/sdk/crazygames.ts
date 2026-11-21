@@ -3,7 +3,7 @@ import { sounds } from '../game/audio.ts';
 interface CrazyGamesCallbacks {
   adStarted?: () => void;
   adFinished?: () => void;
-  adError?: (error: unknown) => void;
+  adError?: (error: unknown, errorData?: unknown) => void;
 }
 
 interface CrazyGamesSDKv3 {
@@ -28,6 +28,14 @@ interface CrazyGamesSDKv3 {
   };
 }
 
+export interface RewardedAdCallbacks {
+  onStart?: () => void;
+  onReward: () => void;
+  onFallbackModal: () => void;
+  onError?: (reason: string) => void;
+  onDone?: () => void;
+}
+
 declare global {
   interface Window {
     CrazyGames?: {
@@ -36,13 +44,29 @@ declare global {
   }
 }
 
+export function extractAdErrorReason(error: unknown, errorData?: unknown): string {
+  const candidates = [errorData, error];
+  for (const item of candidates) {
+    if (!item) continue;
+    if (typeof item === 'string' && item.trim()) return item.trim();
+    if (typeof item === 'object') {
+      const record = item as Record<string, unknown>;
+      if (typeof record.reason === 'string' && record.reason.trim()) return record.reason.trim();
+      if (typeof record.message === 'string' && record.message.trim()) return record.message.trim();
+      if (typeof record.code === 'string' && record.code.trim()) return record.code.trim();
+    }
+  }
+  return 'Ad could not be loaded (blocked or no inventory available).';
+}
+
 class PlatformSDK {
   private initPromise: Promise<void> | null = null;
   private sdkReady = false;
   private isCrazyGamesEnv = false;
   private pendingGameplayState: 'start' | 'stop' | null = null;
+  private adRequestInFlight = false;
 
-  public async init(): Promise<void> {
+  private ensureSdkInit(): Promise<void> {
     if (this.initPromise) return this.initPromise;
 
     this.initPromise = (async () => {
@@ -52,7 +76,7 @@ class PlatformSDK {
       try {
         const result = await Promise.race([
           sdk.init().then(() => 'ok' as const),
-          new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), 2500)),
+          new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), 3500)),
         ]);
 
         if (result !== 'ok') {
@@ -86,8 +110,16 @@ class PlatformSDK {
     return this.initPromise;
   }
 
+  public async init(): Promise<void> {
+    return this.ensureSdkInit();
+  }
+
   public isCrazyGames(): boolean {
     return this.isCrazyGamesEnv;
+  }
+
+  public isAdInFlight(): boolean {
+    return this.adRequestInFlight;
   }
 
   public getCountryCode(): string | null {
@@ -165,34 +197,64 @@ class PlatformSDK {
     }
   }
 
-  public requestRewardedAd(
-    onReward: () => void,
-    onFallbackModal: () => void,
-    onDone?: () => void
-  ): void {
-    const adModule = window.CrazyGames?.SDK?.ad;
-    if (this.sdkReady && this.isCrazyGamesEnv && adModule && typeof adModule.requestAd === 'function') {
-      this.gameplayStop();
-      sounds.setAdPaused(true);
-      adModule.requestAd('rewarded', {
-        adStarted: () => {
-          sounds.setAdPaused(true);
-        },
-        adFinished: () => {
-          sounds.setAdPaused(false);
-          this.gameplayStart();
-          onReward();
-          onDone?.();
-        },
-        adError: () => {
-          sounds.setAdPaused(false);
-          onDone?.();
-        },
-      });
-      return;
-    }
+  public async requestRewardedAd(callbacks: RewardedAdCallbacks): Promise<void> {
+    if (this.adRequestInFlight) return;
+    this.adRequestInFlight = true;
 
-    onFallbackModal();
+    try {
+      if (!this.sdkReady && window.CrazyGames?.SDK) {
+        await Promise.race([
+          this.ensureSdkInit(),
+          new Promise<void>((resolve) => setTimeout(resolve, 6000)),
+        ]);
+      }
+
+      const adModule = window.CrazyGames?.SDK?.ad;
+      if (this.sdkReady && this.isCrazyGamesEnv && adModule && typeof adModule.requestAd === 'function') {
+        this.gameplayStop();
+        sounds.setAdPaused(true);
+        callbacks.onStart?.();
+
+        let settled = false;
+        const finishAd = (rewarded: boolean, reason?: string) => {
+          if (settled) return;
+          settled = true;
+          this.adRequestInFlight = false;
+          sounds.setAdPaused(false);
+          if (rewarded) {
+            callbacks.onReward();
+          } else {
+            callbacks.onError?.(reason || 'Ad unavailable');
+          }
+          callbacks.onDone?.();
+        };
+
+        try {
+          adModule.requestAd('rewarded', {
+            adStarted: () => {
+              sounds.setAdPaused(true);
+            },
+            adFinished: () => {
+              finishAd(true);
+            },
+            adError: (error, errorData) => {
+              finishAd(false, extractAdErrorReason(error, errorData));
+            },
+          });
+        } catch (err) {
+          finishAd(false, extractAdErrorReason(err));
+        }
+        return;
+      }
+
+      this.adRequestInFlight = false;
+      callbacks.onFallbackModal();
+    } catch (err) {
+      this.adRequestInFlight = false;
+      sounds.setAdPaused(false);
+      callbacks.onError?.(extractAdErrorReason(err));
+      callbacks.onDone?.();
+    }
   }
 }
 

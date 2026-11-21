@@ -33,7 +33,8 @@ jobs:
         run: |
           npm run build
           (cd dist && zip -r ../game-portal-release.zip .)
-          VITE_PORTAL=crazygames npx vite build --outDir dist-cg
+          rm -rf dist-cg
+          npm run build:crazygames
           (cd dist-cg && zip -r ../crazygames-release.zip .)
 
       - name: Install Playwright & Chromium (isolated temp dir)

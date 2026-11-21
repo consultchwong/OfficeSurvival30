@@ -13,12 +13,15 @@ export default defineConfig(({ command }) => {
       tailwindcss(),
       {
         name: 'inject-portal-sdk',
-        transformIndexHtml(html) {
-          if (!isCrazyGamesBuild) return html;
-          return html.replace(
-            '</head>',
-            '    <script src="https://sdk.crazygames.com/crazygames-sdk-v3.js"></script>\n  </head>'
-          );
+        transformIndexHtml: {
+          order: 'pre',
+          handler(html) {
+            if (!isCrazyGamesBuild) return html;
+            return html.replace(
+              '</head>',
+              '    <script src="https://sdk.crazygames.com/crazygames-sdk-v3.js"></script>\n  </head>'
+            );
+          },
         },
       },
     ],

@@ -607,15 +607,31 @@ export default function App() {
   // Trigger Rewarded Ad (CrazyGames SDK v3 on CrazyGames, built-in parody AdModal elsewhere)
   const triggerAdFlow = useCallback(
     (mode: AdOfferMode) => {
-      platformSDK.requestRewardedAd(
-        () => handleAdRewardForMode(mode),
-        () => {
+      void platformSDK.requestRewardedAd({
+        onReward: () => handleAdRewardForMode(mode),
+        onFallbackModal: () => {
+          if (mode === 'audit_penalty') {
+            setShowAuditModal(false);
+          }
           sounds.setAdPaused(true);
           setAdOfferMode(mode);
-        }
-      );
+        },
+        onError: () => {
+          showFeedback(t.feedbackAdError, 'penalty');
+        },
+        onDone: () => {
+          if (
+            mode === 'emergency_boost' &&
+            phase === 'playing' &&
+            !showRoleModal &&
+            !showAuditModal
+          ) {
+            platformSDK.gameplayStart();
+          }
+        },
+      });
     },
-    [handleAdRewardForMode]
+    [handleAdRewardForMode, showFeedback, t.feedbackAdError, phase, showRoleModal, showAuditModal]
   );
 
   const handleWatchAdRevive = useCallback(() => triggerAdFlow('revive'), [triggerAdFlow]);
@@ -625,7 +641,6 @@ export default function App() {
     triggerAdFlow('emergency_boost');
   }, [day, boostCooldownUntilDay, triggerAdFlow]);
   const handleWatchAdAuditReward = useCallback(() => {
-    setShowAuditModal(false);
     triggerAdFlow('audit_penalty');
   }, [triggerAdFlow]);
 
@@ -873,7 +888,7 @@ export default function App() {
       {feedbackBanner && (
         <div
           data-testid="feedback-banner"
-          className={`fixed top-14 z-40 px-3.5 py-1.5 rounded-lg border-2 border-slate-900 shadow-lg text-xs font-black animate-fade-in ${
+          className={`fixed top-14 z-[60] px-3.5 py-1.5 rounded-lg border-2 border-slate-900 shadow-lg text-xs font-black animate-fade-in ${
             feedbackBanner.tone === 'reward'
               ? 'bg-emerald-400 text-slate-950'
               : 'bg-rose-600 text-white'

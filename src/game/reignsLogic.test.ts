@@ -25,6 +25,7 @@ import { getLocalizedCards, getLocalizedPackages } from './localizedData.ts';
 import { CARDS_EN, PACKAGES_EN } from './locales/cards_en.ts';
 import { CARDS_JA, PACKAGES_JA } from './locales/cards_ja.ts';
 import { CARDS_KO, PACKAGES_KO } from './locales/cards_ko.ts';
+import { extractAdErrorReason } from '../sdk/crazygames.ts';
 import { LanguageCode } from './types.ts';
 
 test('default language is English (en)', () => {
@@ -237,6 +238,7 @@ test('all event cards and 24 hero packages are completely translated across en, 
     assert.ok(t.titleSvgMain.length > 0);
     assert.ok(t.auditTitle.length > 0);
     assert.ok(t.hudAdBoostBtn.length > 0);
+    assert.ok(t.feedbackAdError.length > 0);
 
     const cards = getLocalizedCards(lang);
     assert.equal(cards.length, GAME_CARDS.length);
@@ -258,4 +260,12 @@ test('all event cards and 24 hero packages are completely translated across en, 
       assert.ok(entry.description.length > 0, `Empty description for ${basePkg.id} in ${lang}`);
     }
   }
+});
+
+test('extractAdErrorReason handles CrazyGames SDK error strings, objects, and unknown payloads', () => {
+  assert.equal(extractAdErrorReason('adblock'), 'adblock');
+  assert.equal(extractAdErrorReason(null, { reason: 'unfilled' }), 'unfilled');
+  assert.equal(extractAdErrorReason({ message: 'Network timeout' }), 'Network timeout');
+  assert.equal(extractAdErrorReason({ code: 'SDK_ERR' }), 'SDK_ERR');
+  assert.ok(extractAdErrorReason(undefined, undefined).length > 0);
 });

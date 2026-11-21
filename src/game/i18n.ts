@@ -322,6 +322,7 @@ export interface UiTranslations {
   feedbackAdBoost: (coins: number) => string;
   feedbackAuditCleared: (coins: number) => string;
   feedbackAuditPenalty: string;
+  feedbackAdError: string;
   // VictoryModal
   victoryStageBadge: string;
   victoryHeading: string;
@@ -486,6 +487,7 @@ export const UI_TRANSLATIONS: Record<LanguageCode, UiTranslations> = {
     feedbackAdBoost: (coins) => `⚡ Sponsor Aid! +22 Lowest Stat & +${coins} Coins!`,
     feedbackAuditCleared: (coins) => `🛡️ Audit Passed! +16 Lowest Stat & +${coins} Coins!`,
     feedbackAuditPenalty: '⚠️ Refused Sponsor Ad: -15❤️ / -12👔 / -10💰 Penalty!',
+    feedbackAdError: '⚠️ Sponsor ad unavailable right now. Please try again later!',
     victoryStageBadge: 'STAGE 30 CLEARED · SUPREME CORPORATE SURVIVOR',
     victoryHeading: '🏆 Victory! Survived All 30 Days!',
     victorySpeechQuote: '"Total comeback! Year-end bonus secured!"',
@@ -654,6 +656,7 @@ export const UI_TRANSLATIONS: Record<LanguageCode, UiTranslations> = {
     feedbackAdBoost: (coins) => `⚡ 贊助空投！最低數值 +22 且 +${coins} 幣！`,
     feedbackAuditCleared: (coins) => `🛡️ 稽核過關！最低數值 +16 且 +${coins} 幣！`,
     feedbackAuditPenalty: '⚠️ 拒看贊助廣告：扣除 -15❤️ / -12👔 / -10💰！',
+    feedbackAdError: '⚠️ 目前無法載入贊助廣告，請稍後再試！',
     victoryStageBadge: 'STAGE 30 CLEARED · 稱霸業界的社畜王',
     victoryHeading: '🏆 恭喜！成功生存 30 天！',
     victorySpeechQuote: '「一發逆轉！年終獎金全數入袋！」',
@@ -822,6 +825,7 @@ export const UI_TRANSLATIONS: Record<LanguageCode, UiTranslations> = {
     feedbackAdBoost: (coins) => `⚡ スポンサー支援！最低値 +22 ＆ +${coins} コイン！`,
     feedbackAuditCleared: (coins) => `🛡️ 監査クリア！最低値 +16 ＆ +${coins} コイン！`,
     feedbackAuditPenalty: '⚠️ CM拒否ペナルティ：-15❤️ / -12👔 / -10💰！',
+    feedbackAdError: '⚠️ 現在スポンサーCMを読み込めません。しばらくしてからお試しください。',
     victoryStageBadge: 'STAGE 30 CLEARED · 業界最強の社畜王',
     victoryHeading: '🏆 祝！30日間生き残り達成！',
     victorySpeechQuote: '「一発逆転！ボーナス満額ゲットだぜ！」',
@@ -990,6 +994,7 @@ export const UI_TRANSLATIONS: Record<LanguageCode, UiTranslations> = {
     feedbackAdBoost: (coins) => `⚡ 스폰서 지원! 최저 스탯 +22 & +${coins} 코인!`,
     feedbackAuditCleared: (coins) => `🛡️ 감사 통과! 최저 스탯 +16 & +${coins} 코인!`,
     feedbackAuditPenalty: '⚠️ 광고 거부 페널티 적용: -15❤️ / -12👔 / -10💰!',
+    feedbackAdError: '⚠️ 현재 스폰서 광고를 불러올 수 없습니다. 잠시 후 다시 시도해주세요!',
     victoryStageBadge: 'STAGE 30 CLEARED · 업계를 제패한 직장왕',
     victoryHeading: '🏆 축하합니다! 30일 생존 성공!',
     victorySpeechQuote: '"일발역전! 성과급 전액 입금 완료!"',

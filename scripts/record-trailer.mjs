@@ -159,7 +159,7 @@ async function recordSpec(browser, specKey) {
   await page.keyboard.press('ArrowRight');
   await sleep(850);
 
-  // Phase 2 (~4s): Showcase 32-Character Codex modal briefly (high visual variety for store trailer)
+  // Phase 2 (~4s): Showcase 64-Character Codex modal briefly (high visual variety for store trailer)
   const rosterBtn = page.locator('header button[aria-label="Character Roster & Codex"]');
   if (await rosterBtn.isVisible()) {
     await rosterBtn.click();

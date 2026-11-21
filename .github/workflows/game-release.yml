@@ -29,10 +29,10 @@ jobs:
         run: npm install --legacy-peer-deps
 
       - name: TypeScript type check
-        run: npx tsc --noEmit
+        run: npm run lint
 
-      - name: Run game logic & i18n unit tests
-        run: npx tsx --test src/game/reignsLogic.test.ts
+      - name: Run game logic, SDK & i18n unit tests
+        run: npm test
 
       - name: Build generic static bundle (Y8 / GamePix / itch.io / Pages)
         run: npm run build
@@ -42,12 +42,50 @@ jobs:
         run: zip -r ../game-portal-release.zip .
 
       - name: Build CrazyGames SDK v3 bundle & package crazygames-release.zip
-        env:
-          VITE_PORTAL: crazygames
         run: |
           rm -rf dist-cg
-          npx vite build --outDir dist-cg
+          npm run build:crazygames
           (cd dist-cg && zip -r ../crazygames-release.zip .)
+
+      - name: Verify Y8 & CrazyGames portal compliance
+        run: |
+          node -e '
+            const fs = require("node:fs");
+            const { execSync } = require("node:child_process");
+
+            const y8Html = fs.readFileSync("dist/index.html", "utf8");
+            const cgHtml = fs.readFileSync("dist-cg/index.html", "utf8");
+
+            if (y8Html.includes("crazygames-sdk-v3.js")) {
+              throw new Error("Y8 / generic dist/index.html must NOT include CrazyGames SDK script");
+            }
+            if (!cgHtml.includes("https://sdk.crazygames.com/crazygames-sdk-v3.js")) {
+              throw new Error("CrazyGames dist-cg/index.html must include crazygames-sdk-v3.js");
+            }
+            if (!y8Html.includes("./assets/") || !cgHtml.includes("./assets/")) {
+              throw new Error("Production builds must use relative ./assets/ paths");
+            }
+            if (/https:\/\/fonts\.(googleapis|gstatic)\.com/.test(y8Html + cgHtml)) {
+              throw new Error("Unexpected external Google Fonts request found in production HTML");
+            }
+
+            const y8ZipList = execSync("unzip -Z1 game-portal-release.zip", { encoding: "utf8" }).split(/\r?\n/);
+            const cgZipList = execSync("unzip -Z1 crazygames-release.zip", { encoding: "utf8" }).split(/\r?\n/);
+            if (!y8ZipList.includes("index.html")) {
+              throw new Error("game-portal-release.zip missing index.html at ZIP root");
+            }
+            if (!cgZipList.includes("index.html")) {
+              throw new Error("crazygames-release.zip missing index.html at ZIP root");
+            }
+            console.log("Verified Y8 and CrazyGames ZIP bundles pass all compliance checks.");
+          '
+          {
+            echo "### Build & Portal Compliance Summary"
+            echo "- TypeScript check (\`npm run lint\`): Passed"
+            echo "- Unit tests (\`npm test\`): Passed"
+            echo "- \`game-portal-release.zip\` (Y8 / GamePix / itch.io): Verified root \`index.html\`, relative \`./assets/\`, zero external SDKs"
+            echo "- \`crazygames-release.zip\` (CrazyGames): Verified root \`index.html\`, relative \`./assets/\`, CrazyGames SDK v3 injected"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload game-portal-release.zip Artifact (Y8 / GamePix / itch.io)
         uses: actions/upload-artifact@v6
